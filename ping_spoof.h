@@ -19,6 +19,9 @@
 #define IP_ADDR_LEN 4
 #define ETHERNET_HDR_SIZE 14
 #define TCP_HDR_SIZE 20
+#define TYPE_ARP 1
+#define TYPE_IP 2
+#define ICMP_PACKETSIZE 64
 
 #define HTTP_PORT 80
 #define TELNET_PORT 23
@@ -33,6 +36,11 @@
 #define SYN 0x02
 #define RST 0x04
 #define ACK 0x10
+#define LOOP -1
+
+/* IP Address String*/
+char ip[16];
+uint8_t mac[MAC_ADDR_LEN];
 
 /* Ethernet Header */
 struct ethernet_header {
