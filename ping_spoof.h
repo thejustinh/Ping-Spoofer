@@ -18,10 +18,12 @@
 #define MAC_ADDR_LEN 6
 #define IP_ADDR_LEN 4
 #define ETHERNET_HDR_SIZE 14
+#define IP_MIN_HDR_SIZE 20
 #define TCP_HDR_SIZE 20
 #define TYPE_ARP 1
 #define TYPE_IP 2
-#define ICMP_PACKETSIZE 64
+#define OP_REPLY 0x0002
+#define INTERFACE "eth0"
 
 #define HTTP_PORT 80
 #define TELNET_PORT 23
