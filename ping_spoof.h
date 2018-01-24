@@ -13,6 +13,14 @@
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <arpa/inet.h>
+
+#include <sys/fcntl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <net/if.h>
+#include <linux/if.h>
+#include <net/ethernet.h>
+#include <netpacket/packet.h>
 #include "checksum.h"
 
 #define MAC_ADDR_LEN 6
@@ -23,6 +31,7 @@
 #define TYPE_ARP 1
 #define TYPE_IP 2
 #define OP_REPLY 0x0002
+
 #define INTERFACE "eth0"
 
 #define HTTP_PORT 80
@@ -42,6 +51,7 @@
 
 /* IP Address String*/
 char ip[16];
+char * dev = NULL;
 uint8_t mac[MAC_ADDR_LEN];
 
 /* Ethernet Header */

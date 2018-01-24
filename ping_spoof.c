@@ -17,9 +17,9 @@
   ****************************************************************************/
 int sendPacket(uint8_t * packet, size_t packet_length) {
 
-      struct ifreq ifidx = { 0 };                   // interface index
+      struct ifreq ifidx;                   // interface index
       struct sockaddr_ll dest_addr;                        // target address
-      int    sd, i;                                       // raw socket descriptor
+      int sd, i;                                       // raw socket descriptor
 
 
       /* make a raw socket */
@@ -29,7 +29,7 @@ int sendPacket(uint8_t * packet, size_t packet_length) {
       }
 
       /* Get the index of the interface to send on */
-      strncpy(ifidx.ifr_name, INTERFACE, strlen(INTERFACE));      // set interface name
+      strncpy(ifidx.ifr_name, dev, strlen(dev));      // set interface name
       if( ioctl(sd, SIOCGIFINDEX, &ifidx) < 0 ) {         // get interface index
           perror("[-] Error! Cannot get interface index");
           return -1;
@@ -39,7 +39,6 @@ int sendPacket(uint8_t * packet, size_t packet_length) {
       dest_addr.sll_halen   = ETH_ALEN;                    // address length
 
       for( i=0; i<6; ++i ) dest_addr.sll_addr[i] = mac[i]; // set target MAC address
-
 
       /* send spoofed packet (set routing flags to 0) */
       if(sendto(sd, packet, packet_length, 0, (struct sockaddr*)&dest_addr, sizeof(struct sockaddr_ll)) < 0) {
@@ -137,7 +136,6 @@ void constructSendICMP(const u_char *packet) {
   ip_hdr = (struct ip_header *) (packet + ETHERNET_HDR_SIZE);
   icmp_hdr = (struct icmp_header *) (packet + ETHERNET_HDR_SIZE + ((ip_hdr->ver_hdr_len&0x0f) * 4));
   int packet_size = ETHERNET_HDR_SIZE + ntohs(ip_hdr->tot_len);
-
   uint8_t new_packet[packet_size];
   memset(new_packet, 0, packet_size);
   printf("\n\t\tNew Packet Size: %d\n", packet_size);
@@ -187,6 +185,10 @@ void constructSendICMP(const u_char *packet) {
   memcpy(new_packet + ETHERNET_HDR_SIZE + 22, &icmp_checksum, 2);
   memcpy(new_packet + ETHERNET_HDR_SIZE + 24, &icmp_id, 2);
   memcpy(new_packet + ETHERNET_HDR_SIZE + 26, &icmp_seq, 2);
+
+  /* added payload copy */
+  memcpy(new_packet + ETHERNET_HDR_SIZE + 28, packet + ETHERNET_HDR_SIZE + 28, packet_size - (ETHERNET_HDR_SIZE + 28));
+
 
   /* Save IP Checksum */
   checksum = in_cksum((unsigned short *)(new_packet + ETHERNET_HDR_SIZE), 20);
@@ -274,6 +276,9 @@ void constructSendICMP(const u_char *packet) {
 
   printf("\t\tICMP ID: %d\n", ntohs(icmp_test->identifier));
   printf("\t\tICMP Sequence #: %d\n", ntohs(icmp_test->seq_num));
+
+  if ((sendPacket(new_packet, (size_t)packet_size)) == 0)
+    printf("Successful packet sent!\n");
 }
 
 void constructSendARP(const u_char *packet) {
@@ -351,14 +356,17 @@ void constructSendARP(const u_char *packet) {
      printf("\t\tOpcode: Request\n");
   else
      printf("\t\tOpcode: Reply (correct)\n");
-
+/*
   printf("\t\tSender MAC: %s\n",
      ether_ntoa((struct ether_addr *)&arp_test->sender_mac_addr));
   printf("\t\tSender IP: %s\n", inet_ntoa(arp_test->sender_ip_addr));
   printf("\t\tTarget MAC: %s\n",
      ether_ntoa((struct ether_addr *)&arp_test->target_mac_addr));
   printf("\t\tTarget IP: %s\n\n", inet_ntoa(arp_test->target_ip_addr));
+*/
 
+  if ((sendPacket(new_packet, (size_t)(ETHERNET_HDR_SIZE + 28))) == 0)
+    printf("Successful ARP sent!\n");
 }
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
@@ -435,7 +443,7 @@ void checkArgs(int argc, char **argv) {
 int main(int argc, char **argv)
 {
   pcap_t *handle;		                   /* Session handle */
-  char *dev = NULL;		                 /* Device to sniff on */
+  //char *dev = NULL;		                 /* Device to sniff on */
   char errbuf[PCAP_ERRBUF_SIZE];	     /* Error string */
   struct bpf_program fp;		           /* The compiled filter expression */
   char filter_exp[] = "icmp or arp";	 /* The filter expression */
