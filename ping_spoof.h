@@ -18,9 +18,14 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <net/if.h>
-#include <linux/if.h>
 #include <net/ethernet.h>
 #include <netpacket/packet.h>
+
+
+#include <net/if.h>
+
+
+
 #include "checksum.h"
 
 #define MAC_ADDR_LEN 6

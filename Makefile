@@ -6,7 +6,7 @@ CFLAGS = -g -Wall -Werror
 all:  ping_spoof
 
 ping_spoof: ping_spoof.c
-	$(CC) $(CFLAGS) ping_spoof.c ping_spoof.h checksum.c  -lpcap 
+	$(CC) $(CFLAGS) -o ping_spoof ping_spoof.c ping_spoof.h checksum.c  -lpcap 
 
 clean:
 	rm -f ping_spoof

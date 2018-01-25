@@ -1,9 +1,9 @@
-/*******************************
+/************************************
  * CPE 465 - Program 1 - ping_spoof.c
  * Winter 2018
  *
  * @author Justin Herrera
- ******************************/
+ ***********************************/
 
 #include "ping_spoof.h"
 
@@ -17,38 +17,38 @@
   ****************************************************************************/
 int sendPacket(uint8_t * packet, size_t packet_length) {
 
-      struct ifreq ifidx;                   // interface index
-      struct sockaddr_ll dest_addr;                        // target address
-      int sd, i;                                       // raw socket descriptor
+  struct ifreq ifidx;            // interface index
+  struct sockaddr_ll dest_addr;  // target address
+  int sd, i;                     // raw socket descriptor
 
 
-      /* make a raw socket */
-      if((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0) {
-          perror("[-] Error! Cannot create raw socket");
-          return -1;
-      }
+  /* make a raw socket */
+  if((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0) {
+    perror("[-] Error! Cannot create raw socket");
+    return -1;
+  }
 
-      /* Get the index of the interface to send on */
-      strncpy(ifidx.ifr_name, dev, strlen(dev));      // set interface name
-      if( ioctl(sd, SIOCGIFINDEX, &ifidx) < 0 ) {         // get interface index
-          perror("[-] Error! Cannot get interface index");
-          return -1;
-      }
+  /* Get the index of the interface to send on */
+  strncpy(ifidx.ifr_name, dev, strlen(dev));          // set interface name
+  if( ioctl(sd, SIOCGIFINDEX, &ifidx) < 0 ) {         // get interface index
+    perror("[-] Error! Cannot get interface index");
+    return -1;
+  }
 
-      dest_addr.sll_ifindex = ifidx.ifr_ifindex;           // interface index
-      dest_addr.sll_halen   = ETH_ALEN;                    // address length
+  dest_addr.sll_ifindex = ifidx.ifr_ifindex;           // interface index
+  dest_addr.sll_halen   = ETH_ALEN;                    // address length
 
-      for( i=0; i<6; ++i ) dest_addr.sll_addr[i] = mac[i]; // set target MAC address
+  for( i=0; i<6; ++i ) dest_addr.sll_addr[i] = mac[i]; // set target MAC address
 
-      /* send spoofed packet (set routing flags to 0) */
-      if(sendto(sd, packet, packet_length, 0, (struct sockaddr*)&dest_addr, sizeof(struct sockaddr_ll)) < 0) {
-          perror("[-] Error! Cannot send spoofed frame");
-          return -1;
-      }
-      else
-          printf( "[+] Spoofed Ethernet frame sent successfully!\n");
+  /* send spoofed packet (set routing flags to 0) */
+  if(sendto(sd, packet, packet_length, 0, (struct sockaddr*)&dest_addr, sizeof(struct sockaddr_ll)) < 0) {
+    perror("[-] Error! Cannot send spoofed frame");
+    return -1;
+  } 
+  else
+    printf( "[+] Spoofed Ethernet frame sent successfully!\n");
 
-      return 0;                                           // success!
+  return 0; // success!
 
 }
 
@@ -153,19 +153,13 @@ void constructSendICMP(const u_char *packet) {
   uint16_t checksum = 0x0000;
   inet_aton(ip, &src_addr); /* convert string to in_addr_t */
   dest_addr = ip_hdr->source_addr;
+
   /* ICMP */
   uint8_t icmp_type = 0x0;
   uint8_t icmp_code = 0x0;
   uint16_t icmp_checksum = 0x0000;
   uint16_t icmp_id = icmp_hdr->identifier;
   uint16_t icmp_seq = icmp_hdr->seq_num;
-
-  /* Testing Variables */
-  uint16_t testType; memset(&testType, 0, 2);
-  struct ip_header *ip_test;
-  struct icmp_header *icmp_test;
-  int saved_checksum;
-  int icmp_saved_checksum;
 
   memcpy(new_packet, ethernet_hdr->src, MAC_ADDR_LEN); /* Ethernet fields */
   memcpy(new_packet + MAC_ADDR_LEN, mac, MAC_ADDR_LEN);
@@ -187,8 +181,8 @@ void constructSendICMP(const u_char *packet) {
   memcpy(new_packet + ETHERNET_HDR_SIZE + 26, &icmp_seq, 2);
 
   /* added payload copy */
-  memcpy(new_packet + ETHERNET_HDR_SIZE + 28, packet + ETHERNET_HDR_SIZE + 28, packet_size - (ETHERNET_HDR_SIZE + 28));
-
+  memcpy(new_packet + ETHERNET_HDR_SIZE + 28, packet + ETHERNET_HDR_SIZE + 28, 
+         packet_size - (ETHERNET_HDR_SIZE + 28));
 
   /* Save IP Checksum */
   checksum = in_cksum((unsigned short *)(new_packet + ETHERNET_HDR_SIZE), 20);
@@ -200,92 +194,12 @@ void constructSendICMP(const u_char *packet) {
 
   memcpy(new_packet + ETHERNET_HDR_SIZE + 22, &icmp_checksum, 2);
 
-  printf("\t\tConstructing ICMP Packet...");
-  printf("\n\t\tDestination MAC: %x:%x:%x:%x:%x:%x", new_packet[0],
-                                                     new_packet[1],
-                                                     new_packet[2],
-                                                     new_packet[3],
-                                                     new_packet[4],
-                                                     new_packet[5]);
-
-  printf("\n\t\tSource MAC: %x:%x:%x:%x:%x:%x", new_packet[6],
-                                                new_packet[7],
-                                                new_packet[8],
-                                                new_packet[9],
-                                                new_packet[10],
-                                                new_packet[11]);
-
-  memcpy(&testType, new_packet + (2 * MAC_ADDR_LEN), 2);
-  if (ntohs(testType) == ETHERTYPE_IP) {
-    printf("\n\t\tType: IP\n");
-  } else {
-    printf("\n\t\tTYPE: UNKNOWN *****************");
-  }
-
-  ip_test = (struct ip_header *)(new_packet + ETHERNET_HDR_SIZE);
-
-  printf("\t\tIP Version (4): %d\n", (ip_test->ver_hdr_len & 0xf0) >> 4);
-  printf("\t\tHeader Len (20): %d\n", (ip_test->ver_hdr_len&0x0f) * 4);
-  printf("\t\tTotal Length (IP): %d\n", ntohs(ip_test->tot_len));
-  printf("\t\tTOS subfields:\n");
-  printf("\t\t   Diffserv bits (0): %d\n", (ip_test->diffserv_ecn) >> 2);
-  printf("\t\t   ECN bits (0): %d\n", (ip_test->diffserv_ecn & 0x03));
-  printf("\t\tTTL (64): %d\n", ip_test->ttl);
-  if ((ip_test->protocol) == 0x06)
-     printf("\t\tProtocol: TCP\n");
-  else if (ip_test->protocol == 0x01)
-     printf("\t\tProtocol: ICMP\n");
-  else if (ip_test->protocol == 0x11)
-     printf("\t\tProtocol: UDP\n");
-  else
-     printf("\t\tProtocol: Unknown\n");
-
-  saved_checksum = ip_test->checksum;
-  ip_test->checksum = 0;
-  ip_test->checksum = in_cksum((unsigned short *)ip_test,
-     (ip_test->ver_hdr_len & 0x0f) * 4);
-
-  if (saved_checksum == (int)ip_test->checksum)
-     printf("\t\tChecksum: Correct (0x%04x)\n", ntohs(saved_checksum));
-  else
-     printf("\t\tChecksum: Incorrect (0x%04x)\n", ntohs(saved_checksum));
-
-  printf("\t\tSource IP: %s\n", inet_ntoa(ip_test->source_addr));
-  printf("\t\tDest IP: %s\n", inet_ntoa(ip_test->dest_addr));
-
-
-  icmp_test = (struct icmp_header *) (new_packet + ETHERNET_HDR_SIZE + IP_MIN_HDR_SIZE);
-
-  if (icmp_test->type == 0x0)
-     printf("\t\tICMP Type: Reply (Correct)\n");
-  else if (icmp_test->type == 0x08)
-     printf("\t\tICMP Type: Request\n");
-  else
-     printf("\t\tICMP Type: %d\n", icmp_test->type);
-
-  icmp_saved_checksum = icmp_test->checksum;
-  icmp_test->checksum = 0;
-  icmp_test->checksum = in_cksum((unsigned short *)icmp_test,
-        packet_size - ETHERNET_HDR_SIZE - IP_MIN_HDR_SIZE);
-
-  printf("\t\tICMP Code (0): %d\n", icmp_test->code);
-  if (icmp_saved_checksum == (int)icmp_test->checksum)
-    printf("\t\tICMP Checksum: Correct (0x%04x)\n", ntohs(icmp_saved_checksum));
-  else
-    printf("\t\tICMP Checksum: Incorrect (0x%04x)\n", ntohs(icmp_saved_checksum));
-
-  printf("\t\tICMP ID: %d\n", ntohs(icmp_test->identifier));
-  printf("\t\tICMP Sequence #: %d\n", ntohs(icmp_test->seq_num));
-
   if ((sendPacket(new_packet, (size_t)packet_size)) == 0)
     printf("Successful packet sent!\n");
+
 }
 
 void constructSendARP(const u_char *packet) {
-  /*Var tests */
-  const struct arp_header *arp_test;
-  uint16_t testType;
-  /* End var tests */
 
   uint8_t new_packet[ETHERNET_HDR_SIZE + 28];
   const struct ethernet_header *ethernet_hdr;
@@ -323,48 +237,6 @@ void constructSendARP(const u_char *packet) {
   /* target ip */
   memcpy(new_packet + ETHERNET_HDR_SIZE + 24, &dest_addr, 4);
 
-  printf("\t\tConstructing ARP Packet...");
-  printf("\n\t\tDestination MAC: %x:%x:%x:%x:%x:%x", new_packet[0],
-                                                     new_packet[1],
-                                                     new_packet[2],
-                                                     new_packet[3],
-                                                     new_packet[4],
-                                                     new_packet[5]);
-
-  printf("\n\t\tSource MAC: %x:%x:%x:%x:%x:%x", new_packet[6],
-                                                new_packet[7],
-                                                new_packet[8],
-                                                new_packet[9],
-                                                new_packet[10],
-                                                new_packet[11]);
-
-  memcpy(&testType, new_packet + (2 * MAC_ADDR_LEN), 2);
-  if (ntohs(testType) == ETHERTYPE_ARP) {
-    printf("\n\t\tType: ARP (correct)\n");
-  } else {
-    printf("\n\t\tTYPE: UNKNOWN *****************");
-  }
-
-  arp_test = (struct arp_header *)(new_packet + ETHERNET_HDR_SIZE);
-
-  printf("\t\tHardware Type (1): %d\n", ntohs(arp_test->hardware_type));
-  printf("\t\tProtocol Type (2048): %d\n", ntohs(arp_test->protocol_type));
-  printf("\t\tHardware Size (6): %d\n", arp_test->hardware_size);
-  printf("\t\tProtocol Size (4): %d\n", arp_test->protocol_size);
-
-  if (ntohs(arp_test->opcode) == REQUEST)
-     printf("\t\tOpcode: Request\n");
-  else
-     printf("\t\tOpcode: Reply (correct)\n");
-/*
-  printf("\t\tSender MAC: %s\n",
-     ether_ntoa((struct ether_addr *)&arp_test->sender_mac_addr));
-  printf("\t\tSender IP: %s\n", inet_ntoa(arp_test->sender_ip_addr));
-  printf("\t\tTarget MAC: %s\n",
-     ether_ntoa((struct ether_addr *)&arp_test->target_mac_addr));
-  printf("\t\tTarget IP: %s\n\n", inet_ntoa(arp_test->target_ip_addr));
-*/
-
   if ((sendPacket(new_packet, (size_t)(ETHERNET_HDR_SIZE + 28))) == 0)
     printf("Successful ARP sent!\n");
 }
@@ -381,9 +253,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
   if (ntohs(ethernet_hdr->type) == ETHERTYPE_IP) {
 
-    printf("Type: IP -> ICMP\n");
     if (validPacket(TYPE_IP, packet) == 1) {
-      // Consruct ICMP reply
       printf("\n\t\tPacket is for my spoofed IP!\n");
     } else {
       printf("\t\tPacket Dropped\n");
@@ -394,9 +264,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
   } else if (ntohs(ethernet_hdr->type) == ETHERTYPE_ARP) {
 
-     printf("Type: ARP\n");
      if (validPacket(TYPE_ARP, packet) == 1) {
-       // Consruct ARP reply
        printf("\n\t\tPacket is for my spoofed IP!\n");
      } else {
        printf("\t\tPacket Dropped\n");
@@ -407,7 +275,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
   } else {
 
-     printf("Type: unknown\n");
      return;
 
   }
@@ -434,21 +301,18 @@ void checkArgs(int argc, char **argv) {
                                        (unsigned int *) &mac[4],
                                        (unsigned int *) &mac[5]);
 
-  printf("IP: %s", ip);
-  printf("\nMAC: %x:%x:%x:%x:%x:%x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
   return;
+
 }
 
 int main(int argc, char **argv)
 {
-  pcap_t *handle;		                   /* Session handle */
-  //char *dev = NULL;		                 /* Device to sniff on */
-  char errbuf[PCAP_ERRBUF_SIZE];	     /* Error string */
-  struct bpf_program fp;		           /* The compiled filter expression */
+  pcap_t *handle;		         /* Session handle */
+  char errbuf[PCAP_ERRBUF_SIZE];	 /* Error string */
+  struct bpf_program fp;		 /* The compiled filter expression */
   char filter_exp[] = "icmp or arp";	 /* The filter expression */
-  bpf_u_int32 mask;		                 /* The netmask of our sniffing device */
-  bpf_u_int32 net;		                 /* The IP of our sniffing device */
+  bpf_u_int32 mask;		         /* The netmask of our sniffing device */
+  bpf_u_int32 net;		         /* The IP of our sniffing device */
 
   checkArgs(argc, argv);
 
@@ -483,12 +347,6 @@ int main(int argc, char **argv)
     fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
     return(2);
   }
-
-  /* Grab a packet */
-  /* packet = pcap_next(handle, &header); */
-  /* Print its length */
-  /*printf("Jacked a packet with length of [%d]\n", header.len);
-  */
 
   /* now we can set our callback function */
   pcap_loop(handle, LOOP, got_packet, NULL);
