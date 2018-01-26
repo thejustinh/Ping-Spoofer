@@ -13,18 +13,13 @@
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <arpa/inet.h>
-
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <netpacket/packet.h>
-
-
 #include <net/if.h>
-
-
 
 #include "checksum.h"
 
@@ -36,27 +31,11 @@
 #define TYPE_ARP 1
 #define TYPE_IP 2
 #define OP_REPLY 0x0002
-
-#define INTERFACE "eth0"
-
-#define HTTP_PORT 80
-#define TELNET_PORT 23
-#define FTP_PORT 20
-#define POP3_PORT 110
-#define SMTP_PORT 25
-#define DNS_PORT 53
-
-#define REQUEST 0x01
-
-#define FIN 0x01
-#define SYN 0x02
-#define RST 0x04
-#define ACK 0x10
 #define LOOP -1
 
 /* IP Address String*/
 char ip[16];
-char * dev = NULL;
+char * dev;
 uint8_t mac[MAC_ADDR_LEN];
 
 /* Ethernet Header */

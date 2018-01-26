@@ -1,0 +1,9 @@
+Justin Herrera
+
+Towards the end of this project as I was fixing any memory leaks,
+I noticed an error within pcap_compile() which was causing a memory leak.
+This function is used to compile the filter expression with the session 
+handle to filter for only ARP and ICMP packets. I could not find a 
+workaround so I decided not use pcap's built in functionality to
+pre-filter packets. The downside is that this will cause more overhead 
+on the system.

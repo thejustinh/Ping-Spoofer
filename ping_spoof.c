@@ -6,10 +6,13 @@
  ***********************************/
 
 #include "ping_spoof.h"
+#include "smartalloc.h"
+#include <signal.h>
+
+pcap_t *handle; // Session handle
 
 /******************************************************************************
-  * A method to determine if a packet's destination IP matches our spoofed IP.
-  * Also checks for checksum correction.
+  * A method to send the created packet through the device we are sniffing on.
   *
   * @param int type - used to determine if type is of ARP or IP
   * @param const u_char *pkt_data - packet data
@@ -20,7 +23,6 @@ int sendPacket(uint8_t * packet, size_t packet_length) {
   struct ifreq ifidx;            // interface index
   struct sockaddr_ll dest_addr;  // target address
   int sd, i;                     // raw socket descriptor
-
 
   /* make a raw socket */
   if((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0) {
@@ -45,8 +47,6 @@ int sendPacket(uint8_t * packet, size_t packet_length) {
     perror("[-] Error! Cannot send spoofed frame");
     return -1;
   } 
-  else
-    printf( "[+] Spoofed Ethernet frame sent successfully!\n");
 
   return 0; // success!
 
@@ -80,7 +80,6 @@ int validPacket(int type, const u_char *packet) {
 
     // Drop Packet if we received an arp reply (only respond to arp requests)
     if (ntohs(arp_hdr->opcode) != REQUEST) {
-      printf("\n\t\tARP Reply packet...\n");
       return 0;
     }
 
@@ -92,7 +91,6 @@ int validPacket(int type, const u_char *packet) {
 
     // Drop packet if we received ICMP reply (only respond to echo requests)
     if (icmp_hdr->type != 0x08) {
-      printf("\n\t\tICMP Response packet...\n");
       return 0;
     }
 
@@ -114,15 +112,18 @@ int validPacket(int type, const u_char *packet) {
   }
 
   // If packet's target IP is not spoofed IP, drop packet.
-  if (strncmp((const char *)ip, (const char *)ip_buf, 15) != 0) {
-    printf("\n\t\tPacket not for me..\n");
+  if (strncmp((const char *)ip, (const char *)ip_buf, 15) != 0)
     return 0;
-  }
 
   return 1;
 
 }
 
+/******************************************************************************
+ * This method constructs an ICMP packet.
+ *
+ * @param const u_char *packet - this is the received packet
+ *****************************************************************************/
 void constructSendICMP(const u_char *packet) {
 
   struct in_addr src_addr;
@@ -138,7 +139,6 @@ void constructSendICMP(const u_char *packet) {
   int packet_size = ETHERNET_HDR_SIZE + ntohs(ip_hdr->tot_len);
   uint8_t new_packet[packet_size];
   memset(new_packet, 0, packet_size);
-  printf("\n\t\tNew Packet Size: %d\n", packet_size);
 
   /* New packet arguments */
   /* IP */
@@ -194,11 +194,16 @@ void constructSendICMP(const u_char *packet) {
 
   memcpy(new_packet + ETHERNET_HDR_SIZE + 22, &icmp_checksum, 2);
 
-  if ((sendPacket(new_packet, (size_t)packet_size)) == 0)
-    printf("Successful packet sent!\n");
+  if ((sendPacket(new_packet, (size_t)packet_size)) != 0)
+    fprintf(stderr, "Error sending ICMP packet\n");
 
 }
 
+/******************************************************************************
+ * This method constructs and ARP packet.
+ * 
+ * @param const u_char *packet - this is the received packet
+ *****************************************************************************/
 void constructSendARP(const u_char *packet) {
 
   uint8_t new_packet[ETHERNET_HDR_SIZE + 28];
@@ -237,41 +242,37 @@ void constructSendARP(const u_char *packet) {
   /* target ip */
   memcpy(new_packet + ETHERNET_HDR_SIZE + 24, &dest_addr, 4);
 
-  if ((sendPacket(new_packet, (size_t)(ETHERNET_HDR_SIZE + 28))) == 0)
-    printf("Successful ARP sent!\n");
+  if ((sendPacket(new_packet, (size_t)(ETHERNET_HDR_SIZE + 28))) != 0)
+    fprintf(stderr, "Error in sendPacket()\n");
+
 }
 
+/******************************************************************************
+ * This method determines if received packet is our packet of interest. We are
+ * interested in ARP Requests and ICMP Echo (ping) requests.
+ * 
+ * @param u_char *args
+ * @param const struct pcap_pkthdr *header
+ * @param const u_char *packet - received packet
+ *****************************************************************************/
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
 
-  static int count = 1;
   struct ethernet_header *ethernet_hdr;
-
-  printf("\nPacket number %d: ", count);
-  count++;
-
   ethernet_hdr = (struct ethernet_header *)packet;
 
   if (ntohs(ethernet_hdr->type) == ETHERTYPE_IP) {
 
-    if (validPacket(TYPE_IP, packet) == 1) {
-      printf("\n\t\tPacket is for my spoofed IP!\n");
-    } else {
-      printf("\t\tPacket Dropped\n");
+    if (validPacket(TYPE_IP, packet) == 1) 
+      constructSendICMP(packet);
+    else
       return;
-    }
-
-    constructSendICMP(packet);
 
   } else if (ntohs(ethernet_hdr->type) == ETHERTYPE_ARP) {
 
-     if (validPacket(TYPE_ARP, packet) == 1) {
-       printf("\n\t\tPacket is for my spoofed IP!\n");
-     } else {
-       printf("\t\tPacket Dropped\n");
-       return;
-     }
-
-     constructSendARP(packet);
+    if (validPacket(TYPE_ARP, packet) == 1)
+      constructSendARP(packet);       
+    else 
+      return;
 
   } else {
 
@@ -280,17 +281,32 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
   }
 
   return;
+
 }
 
+/******************************************************************************
+ * This method checks for valid arguments in the CLI.
+ *****************************************************************************/
 void checkArgs(int argc, char **argv) {
 
   memset(ip, 0, 16);
   memset(mac ,0, MAC_ADDR_LEN);
 
   if (argc != 3) {
-    printf("*** error: usage: ./ping_spoof <spoofed ip> <spoofed-mac>\n");
+    fprintf(stderr, "*** error: usage: ./ping_spoof <spoofed ip> <spoofed-mac>\n");
     exit(EXIT_FAILURE);
   }
+
+  if (strlen(argv[1]) > 17) {
+    fprintf(stderr, "*** error: please enter valid MAC Address\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (strlen(argv[2]) > 15) {
+    fprintf(stderr, "*** error: please enter valid IP address\n");
+    exit(EXIT_FAILURE);
+  }
+
 
   memcpy(ip, argv[2], 15);
 
@@ -305,14 +321,25 @@ void checkArgs(int argc, char **argv) {
 
 }
 
+/******************************************************************************
+ * A method to catch SIGINT ctr-c and frees memory on exit.
+ *****************************************************************************/
+void terminate() {
+
+  pcap_close(handle);
+  exit(EXIT_SUCCESS);
+
+}
+
+/******************************************************************************
+ * MAIN
+ *****************************************************************************/
 int main(int argc, char **argv)
 {
-  pcap_t *handle;		         /* Session handle */
-  char errbuf[PCAP_ERRBUF_SIZE];	 /* Error string */
-  struct bpf_program fp;		 /* The compiled filter expression */
-  char filter_exp[] = "icmp or arp";	 /* The filter expression */
-  bpf_u_int32 mask;		         /* The netmask of our sniffing device */
-  bpf_u_int32 net;		         /* The IP of our sniffing device */
+
+  char errbuf[PCAP_ERRBUF_SIZE];     /* Error string */
+  bpf_u_int32 mask;		     /* The netmask of our sniffing device */
+  bpf_u_int32 net;		     /* The IP of our sniffing device */
 
   checkArgs(argc, argv);
 
@@ -330,6 +357,9 @@ int main(int argc, char **argv)
     mask = 0;
   }
 
+  signal(SIGINT, terminate);
+  memcpy(ip, argv[2], 15);
+
   /* Open session in promiscuous mode */
   handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
   if (handle == NULL) {
@@ -337,25 +367,9 @@ int main(int argc, char **argv)
     return(2);
   }
 
-  /* Compile and apply filter */
-  if (pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
-    fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
-    return(2);
-  }
-
-  if (pcap_setfilter(handle, &fp) == -1) {
-    fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
-    return(2);
-  }
-
-  /* now we can set our callback function */
+  /* Set callback function */
   pcap_loop(handle, LOOP, got_packet, NULL);
 
-  /* cleanup */
-  pcap_freecode(&fp);
-
-  /* And close the session */
-  pcap_close(handle);
-
   return 0;
+
 }
