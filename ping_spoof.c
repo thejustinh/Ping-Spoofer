@@ -20,7 +20,7 @@ pcap_t *handle; // Session handle
   ****************************************************************************/
 int sendPacket(uint8_t * packet, size_t packet_length) {
 
-  struct ifreq ifidx;            // interface index
+  static struct ifreq ifidx;            // interface index
   struct sockaddr_ll dest_addr;  // target address
   int sd, i;                     // raw socket descriptor
 
@@ -32,7 +32,7 @@ int sendPacket(uint8_t * packet, size_t packet_length) {
 
   /* Get the index of the interface to send on */
   strncpy(ifidx.ifr_name, dev, strlen(dev));          // set interface name
-  if( ioctl(sd, SIOCGIFINDEX, &ifidx) < 0 ) {         // get interface index
+  if( ioctl(sd, SIOCGIFINDEX, (void*)&ifidx) < 0 ) {         // get interface index
     perror("[-] Error! Cannot get interface index");
     return -1;
   }
